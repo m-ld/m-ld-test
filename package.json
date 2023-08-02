@@ -1,0 +1,46 @@
+{
+  "name": "@m-ld/m-ld-test",
+  "version": "0.1.0",
+  "description": "Extensible test orchestration for m-ld engines",
+  "type": "commonjs",
+  "scripts": {
+    "ver": "echo $npm_package_version"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/m-ld/m-ld-test.git"
+  },
+  "keywords": [
+    "m-ld"
+  ],
+  "author": "George Svarovsky <george@m-ld.io>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/m-ld/m-ld-test/issues"
+  },
+  "homepage": "https://github.com/m-ld/m-ld-test#readme",
+  "dependencies": {
+    "@m-ld/m-ld-spec": "^0.7.0-edge.2",
+    "generic-pool": "^3.9.0",
+    "json-rql": "^0.6.2",
+    "loglevel": "^1.8.1",
+    "node-fetch": "^2.6.12",
+    "restify": "^8.6.1",
+    "restify-errors": "^8.0.2",
+    "tmp": "^0.2.1"
+  },
+  "devDependencies": {
+    "@m-ld/io-js-build": "^0.1.1",
+    "@types/restify": "^8.5.7",
+    "aedes": "^0.48.1",
+    "jasmine": "^4.4.0"
+  },
+  "peerDependencies": {
+    "jasmine": "4"
+  },
+  "peerDependenciesMeta": {
+    "jasmine": {
+      "optional": true
+    }
+  }
+}

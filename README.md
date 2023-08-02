@@ -1,2 +1,2 @@
 # m-ld-test
-Extensible test orchestration for m-ld engines
+Extensible test orchestration library for m-ld engines
