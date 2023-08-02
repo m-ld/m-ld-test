@@ -1,9 +1,10 @@
 {
   "name": "@m-ld/m-ld-test",
-  "version": "0.1.0",
+  "version": "0.1.1-edge.0",
   "description": "Extensible test orchestration for m-ld engines",
   "type": "commonjs",
   "scripts": {
+    "build": "",
     "ver": "echo $npm_package_version"
   },
   "repository": {
