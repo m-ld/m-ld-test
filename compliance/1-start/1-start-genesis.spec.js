@@ -1,4 +1,4 @@
-const { Clone } = require('../../lib');
+const { Clone } = require('../../ext');
 
 /**
  * Basic tests for start and transact on a genesis clone

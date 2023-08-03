@@ -1,14 +1,17 @@
 {
-  "compileOnSave": false,
   "compilerOptions": {
-    "noEmit": true,
-    "allowJs": true,
-    "checkJs": true,
+    "experimentalDecorators": true,
+    "noImplicitAny": true,
+    "esModuleInterop": true,
     "target": "es6",
-    "resolveJsonModule": true,
-    "moduleResolution": "node"
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "inlineSourceMap": true,
+    "declaration": true,
+    "strictNullChecks": true,
+    "outDir": "ext"
   },
   "include": [
-    "./lib"
+    "src/**/*"
   ]
 }

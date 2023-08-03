@@ -1,19 +1,25 @@
-const aedes = require('aedes');
-const LOG = require('loglevel');
-const { logTs } = require('../util');
-const { promisify } = require('util');
-const { createServer } = require('net');
+import { CloneChildProcess, Remoting } from './index';
+import Aedes from 'aedes';
+import type { Client } from 'aedes:client';
+import LOG from 'loglevel';
+import { logTs } from '../util';
+import { promisify } from 'util';
+import { AddressInfo, createServer, Server } from 'net';
 
-/**
- * @implements m_ld_test.Remoting
- */
-class MqttRemoting {
-  // noinspection JSValidateTypes - no idea
-  /** @type aedes.Aedes */
-  aedes = new aedes();
+export interface MqttCloneChildProcess extends CloneChildProcess {
+  mqtt: {
+    client?: Client,
+    server: Server,
+    port: number
+  };
+}
 
-  /** @param {{ [cloneId: string]: m_ld_test.MqttCloneChildProcess}} clones */
-  initialise(clones) {
+export class MqttRemoting implements Remoting<MqttCloneChildProcess> {
+  private readonly aedes = new Aedes();
+
+  initialise(clones: {
+    [cloneId: string]: MqttCloneChildProcess
+  }) {
     this.aedes.on('publish', (packet, client) => {
       const log = LOG.getLogger('aedes');
       if (client) {
@@ -34,7 +40,7 @@ class MqttRemoting {
       }
     });
 
-    function reportError(client, err) {
+    function reportError(client: Client, err: any) {
       // Don't report if the clone is dead or dying
       const cloneProcess = clones[client.id]?.process;
       if (cloneProcess != null && !cloneProcess.killed)
@@ -44,15 +50,17 @@ class MqttRemoting {
     this.aedes.on('connectionError', reportError);
   }
 
-  /** @returns {Promise<{}>} */
-  provision(cloneId) {
-    // noinspection JSCheckFunctionSignatures
+  provision(cloneId: string) {
+    // @ts-ignore - no idea
     const mqttServer = createServer(this.aedes.handle);
-    return new Promise((resolve, reject) => {
-      mqttServer.listen(err => {
+    return new Promise<{
+      config: {},
+      meta: Omit<MqttCloneChildProcess, keyof CloneChildProcess>
+    }>((resolve, reject) => {
+      mqttServer.listen((err: any) => {
         if (err)
           return reject(err);
-        const mqttPort = mqttServer.address().port;
+        const mqttPort = (mqttServer.address() as AddressInfo).port;
         LOG.debug(logTs(), cloneId, `Clone MQTT port is ${mqttPort}`);
         return resolve({
           config: {
@@ -72,13 +80,8 @@ class MqttRemoting {
     });
   }
 
-  /**
-   * @param {m_ld_test.MqttCloneChildProcess} clone
-   * @param partition
-   * @returns {Promise<void>}
-   */
-  partition({ id, mqtt }, partition) {
-    return new Promise((resolve, reject) => {
+  partition({ id, mqtt }: MqttCloneChildProcess, partition: boolean) {
+    return new Promise<void>((resolve, reject) => {
       if (partition && mqtt.server.listening) {
         if (mqtt.client)
           mqtt.client.conn.destroy();
@@ -91,26 +94,21 @@ class MqttRemoting {
           }
         });
       } else if (!partition && !mqtt.server.listening) {
-        mqtt.server.listen(mqtt.port, err => {
-          if (err) {
-            return reject(err);
-          } else {
-            LOG.debug(logTs(), id, `MQTT re-started`);
-            return resolve();
-          }
+        mqtt.server.listen(mqtt.port, () => {
+          LOG.debug(logTs(), id, `MQTT re-started`);
+          return resolve();
         });
       } else {
         return reject('Partition request does not match MQTT state');
       }
     });
   }
-  /**
-   * @param {m_ld_test.MqttCloneChildProcess} clone
-   * @param opts
-   * @returns {Promise<void>}
-   */
-  release({ id, mqtt }, opts) {
-    return new Promise((resolve, reject) => {
+
+  release(
+    { id, mqtt }: MqttCloneChildProcess,
+    opts?: { unref: true }
+  ) {
+    return new Promise<void>((resolve, reject) => {
       if (mqtt.server.listening) {
         // Give the broker a chance to shut down. If it does not, this usually
         // indicates that the clone has not released its connection. In that case
@@ -135,5 +133,3 @@ class MqttRemoting {
     });
   }
 }
-
-module.exports = MqttRemoting;

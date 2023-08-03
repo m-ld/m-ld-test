@@ -1,8 +1,11 @@
-const fetch = require('node-fetch');
-const EventEmitter = require('events');
-const { Transform } = require('stream');
+import fetch, { RequestInit, Response } from 'node-fetch';
+import EventEmitter from 'events';
+import { Transform } from 'stream';
+import { MeldConfig } from '@m-ld/m-ld-spec';
+import { Pattern, Subject } from 'json-rql';
+import { MeldUpdate } from '@m-ld/m-ld-spec/types';
 
-const ids = new Set;
+const ids = new Set<string>();
 function newId() {
   let id;
   // noinspection StatementWithEmptyBodyJS
@@ -14,34 +17,33 @@ function newId() {
  * A clone object wraps the orchestrator API for a single clone.
  * @todo this should implement MeldClone
  */
-class Clone extends EventEmitter {
+export class Clone extends EventEmitter {
   /**
    * Can be used to set an ambient 'current' domain, for example during a test.
    * This will be used when the clone is started, unless a domain is specified
    * in the passed configuration.
-   * @type {string}
    */
-  static domain;
+  static domain: string;
 
   /**
    * The base URL of the orchestrator. Must be set prior to any tests.
-   * @type string
    */
-  static orchestratorUrl;
+  static orchestratorUrl: string;
 
-  constructor(config) {
+  constructor(
+    private readonly config: Partial<MeldConfig> = {},
+    readonly id = newId()
+  ) {
     super();
-    this.id = newId();
-    this.config = config;
   }
 
   /**
    * Creates the requested number of clones, with the given configuration. The
    * returned clones are not started.
-   * @param {number} count number of clones
-   * @param {import('@m-ld/m-ld-spec').MeldConfig} [config] configuration for all clones
+   * @param count number of clones
+   * @param [config] configuration for all clones
    */
-  static create(count, config) {
+  static create(count: number, config?: MeldConfig) {
     return Array(count).fill(undefined).map(() => new Clone(config));
   }
 
@@ -49,10 +51,10 @@ class Clone extends EventEmitter {
    * Creates and starts the requested number of clones, with the given
    * configuration. If you want to start a subset of the clones, call
    * {@link create} instead and start them yourself.
-   * @param {number} count number of clones
-   * @param {import('@m-ld/m-ld-spec').MeldConfig} [config] configuration for all clones
+   * @param count number of clones
+   * @param [config] configuration for all clones
    */
-  static async start(count, config) {
+  static async start(count: number, config?: MeldConfig) {
     const clones = Clone.create(count, config);
     await clones[0].start(true);
     await Promise.all(clones.slice(1).map(clone => clone.start()));
@@ -68,10 +70,10 @@ class Clone extends EventEmitter {
    * => { '@type': 'started' },
    *    { '@type: 'status', body: MeldStatus },
    *    { '@type: 'updated', body: MeldUpdate }...
-   * @param {boolean} requireOnline if `true`, wait for the clone to have status online
+   * @param requireOnline if `true`, wait for the clone to have status online
    */
   async start(requireOnline = false) {
-    const events = await send('start', {
+    const events: Transform = await send('start', {
       cloneId: this.id,
       domain: this.config?.['@domain'] || Clone.domain
     }, this.config);
@@ -124,11 +126,12 @@ class Clone extends EventEmitter {
    * <= json-rql
    * => Subject ...
    */
-  async transact(pattern) {
-    const subjects = await send('transact', { cloneId: this.id }, pattern);
+  async transact(pattern: Pattern) {
+    const subjects: Transform
+      = await send('transact', { cloneId: this.id }, pattern);
     // TODO: option to just return the stream
     return new Promise((resolve, reject) => {
-      const all = [];
+      const all: Subject[] = [];
       subjects.on('data', subject => all.push(subject));
       subjects.on('end', () => resolve(all));
       subjects.on('error', reject);
@@ -149,10 +152,10 @@ class Clone extends EventEmitter {
    * the given path. The path matching requires the last path element to be a
    * deep value which has the prior path elements appearing, in order, in its
    * deep path.
-   * @param {...any} path any sparse path that the update must contain
-   * @returns {Promise<import('@m-ld/m-ld-spec').MeldUpdate>} the update
+   * @param path any sparse path that the update must contain
+   * @returns the update
    */
-  async updated(...path) {
+  async updated(...path: any[]): Promise<MeldUpdate> {
     return new Promise(resolve => this.on('updated',
       update => hasPath(update, path) && resolve(update)));
   }
@@ -160,10 +163,8 @@ class Clone extends EventEmitter {
   /**
    * Utility returning a promise that resolves when the given status value has
    * been emitted by the clone.
-   * @param {'online' | 'outdated' | 'silo'} status
-   * @param {boolean} value
    */
-  async status(status, value) {
+  async status(status: 'online' | 'outdated' | 'silo', value: boolean): Promise<void> {
     return new Promise(resolve => this.on('status', newStatus => {
       if (newStatus != null && newStatus[status] === value)
         resolve();
@@ -179,12 +180,12 @@ class Clone extends EventEmitter {
   }
 }
 
-async function send(message, params, body) {
+async function send(message: string, params: Record<string, any>, body?: any) {
   // noinspection JSUnresolvedReference
   const url = new URL(message, Clone.orchestratorUrl);
   Object.entries(params).forEach(([name, value]) =>
     url.searchParams.append(name, value));
-  const options = { method: 'post' };
+  const options: RequestInit = { method: 'post' };
   if (body) {
     options.body = JSON.stringify(body);
     options.headers = { 'Content-Type': 'application/json' };
@@ -207,7 +208,7 @@ async function send(message, params, body) {
   }
 }
 
-async function checkStatus(res, url) {
+async function checkStatus(res: Response, url: URL) {
   if (res.ok) { // res.status >= 200 && res.status < 300
     return res;
   } else {
@@ -219,7 +220,7 @@ async function checkStatus(res, url) {
   }
 }
 
-function hasPath(obj, path) {
+function hasPath(obj: any, path: any[]): boolean {
   if (path == null || !path.length || (path.length === 1 && obj === path[0])) {
     return true;
   } else if (typeof path[0] === 'object') {
@@ -232,5 +233,3 @@ function hasPath(obj, path) {
   }
   return false;
 }
-
-module.exports = Clone;

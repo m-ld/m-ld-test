@@ -1,28 +1,43 @@
-const { EventEmitter } = require('events');
-const LOG = require('loglevel');
-const { logTs } = require('../util');
-const { isRead } = require('json-rql');
+import { EventEmitter } from 'events';
+import LOG from 'loglevel';
+import { logTs } from '../util';
+import { isRead } from 'json-rql';
+import { MeldClone, MeldConfig } from '@m-ld/m-ld-spec';
 
-class CloneProcess extends EventEmitter {
-  /**
-   * @param {node:Process} process
-   * @param {m_ld:CloneFactory} cloneFactory
-   */
-  constructor(process, cloneFactory) {
+export type CloneFactory = (config: MeldConfig, tmpDirName: string) =>
+  Promise<MeldClone & { close(): Promise<void> }>;
+
+export interface CloneMessage {
+  id: string,
+  '@type': string,
+  [key: string]: any
+}
+
+export interface StartMessage extends CloneMessage {
+  '@type': 'start';
+  config: MeldConfig & { logLevel: import('loglevel').LogLevelDesc };
+  tmpDirName: string;
+  requestId: string;
+}
+
+export class CloneProcess extends EventEmitter {
+  constructor(
+    private readonly process: typeof global.process,
+    cloneFactory: CloneFactory
+  ) {
     super();
-    this.process = process;
-    process.on('message', startMsg => {
+    process.on('message', (startMsg: StartMessage) => {
       if (startMsg['@type'] !== 'start')
         return;
 
-      const { config, tmpDirName, requestId } = /**@type {m_ld_test:StartMessage}*/startMsg;
+      const { config, tmpDirName, requestId } = startMsg;
       LOG.setLevel(config.logLevel);
       LOG.debug(logTs(), config['@id'], 'config is', JSON.stringify(config));
       cloneFactory(config, tmpDirName).then(meld => {
         this.send(requestId, 'started', { cloneId: config['@id'] });
 
-        const handler = message => {
-          const settle = (work, resMsgType, terminal) => {
+        const handler = (message: CloneMessage) => {
+          const settle = (work: Promise<unknown>, resMsgType: string, terminal = false) => {
             work.then(() => this.send(message.id, resMsgType))
               .catch(this.errorHandler(message))
               .then(() => !terminal || process.off('message', handler));
@@ -63,19 +78,19 @@ class CloneProcess extends EventEmitter {
         this.send(requestId, 'unstarted', { err: `${err}` });
       });
     });
-    process.send({ '@type': 'active' });
+    process.send!({ '@type': 'active' });
   }
 
-  send(requestId, type, params) {
-    this.process.send({ requestId, '@type': type, ...params },
-      err => err && LOG.warn(logTs(), 'Clone orphaned from orchestrator', err));
+  send(requestId: string, type: string, params = {}) {
+    this.process.send!({ requestId, '@type': type, ...params },
+      (err: any) => err && LOG.warn(logTs(), 'Clone orphaned from orchestrator', err));
   }
 
-  errorHandler(message) {
-    return err => this.sendError(message.id, err);
+  errorHandler(message: CloneMessage) {
+    return (err: any) => this.sendError(message.id, err);
   }
 
-  sendError(requestId, err) {
+  sendError(requestId: string, err: any) {
     LOG.error(logTs(), err);
     return this.send(requestId, 'error', { err: `${err}` });
   }

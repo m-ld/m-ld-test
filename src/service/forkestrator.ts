@@ -1,29 +1,26 @@
-const { fork } = require('child_process');
-const { dirSync: newTmpDir } = require('tmp');
-const restify = require('restify');
-const { BadRequestError, InternalServerError, NotFoundError } = require('restify-errors');
-const { once } = require('events');
-const LOG = require('loglevel');
-const genericPool = require('generic-pool');
-const { EventEmitter } = require('events');
-const { logTs } = require('../util');
+import { ChildProcess, fork } from 'child_process';
+import { DirResult, dirSync as newTmpDir } from 'tmp';
+import restify, { Next, Request, Response } from 'restify';
+import { BadRequestError, InternalServerError, NotFoundError } from 'restify-errors';
+import { EventEmitter, once } from 'events';
+import LOG from 'loglevel';
+import genericPool, { Pool } from 'generic-pool';
+import { logTs } from '../util';
+import { CloneChildProcess, Orchestrator, Remoting } from './index';
+import { CloneMessage } from './clone-process';
 
-// noinspection JSClosureCompilerSyntax - no idea
-/** @implements m_ld_test.Orchestrator */
-class Forkestrator extends EventEmitter {
-  http = restify.createServer();
-  /** @type Set<string> */
-  domains = new Set;
-  /** @type {{ [cloneId: string]: m_ld_test.CloneChildProcess }} */
-  clones = {};
-  /** @type {{ [reqId: string]: [restify.Response, restify.Next] }} */
-  requests = {};
+export class Forkestrator<ProcessType extends CloneChildProcess>
+  extends EventEmitter implements Orchestrator {
+  private readonly http = restify.createServer();
+  private readonly domains = new Set<string>();
+  private readonly clones: { [cloneId: string]: ProcessType } = {};
+  private readonly requests: { [reqId: string]: [Response, Next] } = {};
+  private readonly pool: Pool<ChildProcess>;
 
-  /**
-   * @param {m_ld_test.Remoting} remoting
-   * @param {string} cloneModulePath
-   */
-  constructor(remoting, cloneModulePath) {
+  constructor(
+    private readonly remoting: Remoting<ProcessType>,
+    cloneModulePath: string
+  ) {
     super();
     this.pool = genericPool.createPool({
       async create() {
@@ -49,8 +46,9 @@ class Forkestrator extends EventEmitter {
     this.remoting = remoting;
     this.http.use(restify.plugins.queryParser());
     this.http.use(restify.plugins.bodyParser());
-    ['start', 'transact', 'stop', 'kill', 'destroy', 'partition']
-      .forEach(route => this.http.post('/' + route, this[route].bind(this)));
+    (['start', 'transact', 'stop', 'kill', 'destroy', 'partition'] as
+      ['start', 'transact', 'stop', 'kill', 'destroy', 'partition'])
+      .forEach(route => this.http.post(`/${route}`, this[route].bind(this)));
     this.http.on('after', req => { delete this.requests[req.id()]; });
     this.http.listen(0, () => {
       const url = `http://localhost:${this.http.address().port}`;
@@ -60,15 +58,10 @@ class Forkestrator extends EventEmitter {
     remoting.initialise(this.clones);
   }
 
-  /**
-   * @param {restify.Request} startReq
-   * @param {restify.Response} startRes
-   * @param {restify.Next} next
-   */
-  start(startReq, startRes, next) {
+  start(startReq: Request, startRes: Response, next: Next) {
     this.registerRequest(startReq, startRes, next);
     const { cloneId, domain } = startReq.query;
-    let tmpDir;
+    let tmpDir: DirResult;
     if (cloneId in this.clones) {
       tmpDir = this.clones[cloneId].tmpDir;
       if (this.clones[cloneId].process)
@@ -92,8 +85,10 @@ class Forkestrator extends EventEmitter {
 
       this.pool.acquire().then(process => {
         startRes.header('transfer-encoding', 'chunked');
-        const clone = this.clones[cloneId] = { process, tmpDir, ...meta };
-        const releaseProcess = (cb) => {
+        // @ts-ignore
+        this.clones[cloneId] = { process, tmpDir, ...meta };
+        const clone = this.clones[cloneId];
+        const releaseProcess = (cb: (err: any) => void) => {
           LOG.debug(logTs(), cloneId, `Releasing clone process`);
           this.pool.release(process).then(() => {
             process.off('message', msgHandler);
@@ -101,7 +96,7 @@ class Forkestrator extends EventEmitter {
             this.remoting.release(clone).then(cb, cb);
           }).catch(err => LOG.error(logTs(), cloneId, err));
         };
-        const msgHandler = message => {
+        const msgHandler = (message: CloneMessage) => {
           switch (message['@type']) {
             case 'started':
             case 'updated':
@@ -188,11 +183,11 @@ class Forkestrator extends EventEmitter {
    * @param {restify.Response} res
    * @param {restify.Next} next
    */
-  transact(req, res, next) {
+  transact(req: Request, res: Response, next: Next) {
     this.registerRequest(req, res, next);
     const { cloneId } = req.query;
     this.withClone(cloneId, ({ process }) => {
-      process.send({
+      process!.send({
         id: req.id(),
         '@type': 'transact',
         request: req.body
@@ -206,12 +201,12 @@ class Forkestrator extends EventEmitter {
    * @param {restify.Response} res
    * @param {restify.Next} next
    */
-  stop(req, res, next) {
+  stop(req: Request, res: Response, next: Next) {
     this.registerRequest(req, res, next);
     const { cloneId } = req.query;
     this.withClone(cloneId, ({ process }) => {
       LOG.debug(logTs(), cloneId, `Stopping clone`);
-      process.send({
+      process!.send({
         id: req.id(), '@type': 'stop'
       }, err => {
         if (err) {
@@ -229,13 +224,13 @@ class Forkestrator extends EventEmitter {
    * @param {restify.Response} res
    * @param {restify.Next} next
    */
-  kill(req, res, next) {
+  kill(req: Request, res: Response, next: Next) {
     const { cloneId } = req.query;
     this.withClone(cloneId, clone => {
       LOG.debug(logTs(), cloneId, `Killing clone process`);
-      clone.process.kill();
-      clone.process.on('exit', () => {
-        this.pool.destroy(clone.process).then(() => {
+      clone.process!.kill();
+      clone.process!.on('exit', () => {
+        this.pool.destroy(clone.process!).then(() => {
           delete clone.process;
           this.remoting.release(clone, { unref: true }).then(() => {
             res.send({ '@type': 'killed', cloneId });
@@ -253,7 +248,7 @@ class Forkestrator extends EventEmitter {
    * @param {restify.Response} res
    * @param {restify.Next} next
    */
-  destroy(req, res, next) {
+  destroy(req: Request, res: Response, next: Next) {
     this.registerRequest(req, res, next);
     const { cloneId } = req.query;
     this.withClone(cloneId, ({ process, tmpDir }) => {
@@ -284,7 +279,7 @@ class Forkestrator extends EventEmitter {
    * @param {restify.Response} res
    * @param {restify.Next} next
    */
-  partition(req, res, next) {
+  partition(req: Request, res: Response, next: Next) {
     const { cloneId, state: stateString } = req.query;
     LOG.debug(logTs(), cloneId, `Partitioning clone (${stateString})`);
     const state = stateString !== 'false';
@@ -298,31 +293,17 @@ class Forkestrator extends EventEmitter {
     }, next);
   }
 
-  /**
-   * @param {string} cloneId
-   * @param {import('tmp').DirResult} tmpDir
-   */
-  destroyDataAndForget(cloneId, tmpDir) {
+  destroyDataAndForget(cloneId: string, tmpDir: DirResult) {
     LOG.info(logTs(), cloneId, `Destroying clone data`);
     tmpDir.removeCallback();
     delete this.clones[cloneId];
   }
 
-  /**
-   * @param {restify.Request} req
-   * @param {restify.Response} res
-   * @param {restify.Next} next
-   */
-  registerRequest(req, res, next) {
+  registerRequest(req: Request, res: Response, next: Next) {
     this.requests[req.id()] = [res, next];
   }
 
-  /**
-   * @param {string} cloneId
-   * @param {(clone: m_ld_test.CloneChildProcess) => void} op
-   * @param {restify.Next} next
-   */
-  withClone(cloneId, op/*(subprocess, tmpDir)*/, next) {
+  withClone(cloneId: string, op: (clone: ProcessType) => void, next: Next) {
     if (cloneId in this.clones) {
       op(this.clones[cloneId]);
     } else {
@@ -337,5 +318,3 @@ class Forkestrator extends EventEmitter {
     this.http.close();
   }
 }
-
-module.exports = Forkestrator;

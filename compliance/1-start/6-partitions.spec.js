@@ -1,4 +1,4 @@
-const { Clone } = require('../../lib');
+const { Clone } = require('../../ext');
 
 /**
  * Basic network partitions (no chaos)

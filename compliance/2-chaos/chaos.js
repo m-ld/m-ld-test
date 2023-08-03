@@ -1,4 +1,4 @@
-const { Clone } = require('../../lib');
+const { Clone } = require('../../ext');
 
 const LOG_LEVEL = process.env.LOG_LEVEL?.toLowerCase() ?? 'warn';
 

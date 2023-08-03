@@ -1,5 +1,5 @@
 const Jasmine = require('jasmine');
-const Clone = require('../lib/clone');
+const Clone = require('../ext/clone');
 const { join } = require('path');
 
 /**
