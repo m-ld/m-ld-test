@@ -3,8 +3,13 @@
   "version": "0.1.1-edge.0",
   "description": "Extensible test orchestration for m-ld engines",
   "type": "commonjs",
+  "exports": {
+    ".": "./ext/index.js",
+    "./compliance": "./compliance/index.js"
+  },
   "scripts": {
     "build": "tsc",
+    "dev": "tsc --watch",
     "ver": "echo $npm_package_version"
   },
   "repository": {

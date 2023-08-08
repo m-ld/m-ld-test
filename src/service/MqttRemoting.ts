@@ -1,4 +1,6 @@
-import { CloneChildProcess, Remoting } from './index';
+// noinspection JSUnusedGlobalSymbols
+
+import { CloneChildProcessState, CloneRemotingInfo, Remoting } from './index';
 import Aedes from 'aedes';
 import type { Client } from 'aedes:client';
 import LOG from 'loglevel';
@@ -6,7 +8,7 @@ import { logTs } from '../util';
 import { promisify } from 'util';
 import { AddressInfo, createServer, Server } from 'net';
 
-export interface MqttCloneChildProcess extends CloneChildProcess {
+export interface MqttCloneChildProcess extends CloneChildProcessState {
   mqtt: {
     client?: Client,
     server: Server,
@@ -15,11 +17,18 @@ export interface MqttCloneChildProcess extends CloneChildProcess {
 }
 
 export class MqttRemoting implements Remoting<MqttCloneChildProcess> {
-  private readonly aedes = new Aedes();
+  constructor(
+    private readonly mqttConfig = {
+      host: 'localhost',
+      // port will be set during provisioning
+      // Short timeouts as everything is local
+      connectTimeout: 100,
+      keepalive: 1
+    },
+    private readonly aedes = new Aedes()
+  ) {}
 
-  initialise(clones: {
-    [cloneId: string]: MqttCloneChildProcess
-  }) {
+  initialise(clones: { [cloneId: string]: MqttCloneChildProcess }) {
     this.aedes.on('publish', (packet, client) => {
       const log = LOG.getLogger('aedes');
       if (client) {
@@ -52,29 +61,16 @@ export class MqttRemoting implements Remoting<MqttCloneChildProcess> {
 
   provision(cloneId: string) {
     // @ts-ignore - no idea
-    const mqttServer = createServer(this.aedes.handle);
-    return new Promise<{
-      config: {},
-      meta: Omit<MqttCloneChildProcess, keyof CloneChildProcess>
-    }>((resolve, reject) => {
-      mqttServer.listen((err: any) => {
+    const server = createServer(this.aedes.handle);
+    return new Promise<CloneRemotingInfo<MqttCloneChildProcess>>((resolve, reject) => {
+      server.listen((err: any) => {
         if (err)
           return reject(err);
-        const mqttPort = (mqttServer.address() as AddressInfo).port;
-        LOG.debug(logTs(), cloneId, `Clone MQTT port is ${mqttPort}`);
+        const { port } = server.address() as AddressInfo;
+        LOG.debug(logTs(), cloneId, `Clone MQTT port is ${port}`);
         return resolve({
-          config: {
-            mqtt: {
-              host: 'localhost',
-              port: mqttPort,
-              // Short timeouts as everything is local
-              connectTimeout: 100,
-              keepalive: 1
-            }
-          },
-          meta: {
-            mqtt: { server: mqttServer, port: mqttPort }
-          }
+          config: { mqtt: { ...this.mqttConfig, port } },
+          meta: { mqtt: { server, port } }
         });
       });
     });
@@ -104,10 +100,7 @@ export class MqttRemoting implements Remoting<MqttCloneChildProcess> {
     });
   }
 
-  release(
-    { id, mqtt }: MqttCloneChildProcess,
-    opts?: { unref: true }
-  ) {
+  release({ id, mqtt }: MqttCloneChildProcess, opts?: { unref: true }) {
     return new Promise<void>((resolve, reject) => {
       if (mqtt.server.listening) {
         // Give the broker a chance to shut down. If it does not, this usually

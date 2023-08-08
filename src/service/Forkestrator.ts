@@ -1,3 +1,5 @@
+// noinspection JSUnusedGlobalSymbols
+
 import { ChildProcess, fork } from 'child_process';
 import { DirResult, dirSync as newTmpDir } from 'tmp';
 import restify, { Next, Request, Response } from 'restify';
@@ -6,10 +8,10 @@ import { EventEmitter, once } from 'events';
 import LOG from 'loglevel';
 import genericPool, { Pool } from 'generic-pool';
 import { logTs } from '../util';
-import { CloneChildProcess, Orchestrator, Remoting } from './index';
-import { CloneMessage } from './clone-process';
+import { CloneChildProcessState, Orchestrator, Remoting } from './index';
+import { CloneMessage } from './CloneProcess';
 
-export class Forkestrator<ProcessType extends CloneChildProcess>
+export class Forkestrator<ProcessType extends CloneChildProcessState>
   extends EventEmitter implements Orchestrator {
   private readonly http = restify.createServer();
   private readonly domains = new Set<string>();
@@ -178,11 +180,6 @@ export class Forkestrator<ProcessType extends CloneChildProcess>
     });
   }
 
-  /**
-   * @param {restify.Request} req
-   * @param {restify.Response} res
-   * @param {restify.Next} next
-   */
   transact(req: Request, res: Response, next: Next) {
     this.registerRequest(req, res, next);
     const { cloneId } = req.query;
@@ -196,11 +193,6 @@ export class Forkestrator<ProcessType extends CloneChildProcess>
     }, next);
   }
 
-  /**
-   * @param {restify.Request} req
-   * @param {restify.Response} res
-   * @param {restify.Next} next
-   */
   stop(req: Request, res: Response, next: Next) {
     this.registerRequest(req, res, next);
     const { cloneId } = req.query;
@@ -219,11 +211,6 @@ export class Forkestrator<ProcessType extends CloneChildProcess>
     }, next);
   }
 
-  /**
-   * @param {restify.Request} req
-   * @param {restify.Response} res
-   * @param {restify.Next} next
-   */
   kill(req: Request, res: Response, next: Next) {
     const { cloneId } = req.query;
     this.withClone(cloneId, clone => {
@@ -243,11 +230,6 @@ export class Forkestrator<ProcessType extends CloneChildProcess>
     }, next);
   }
 
-  /**
-   * @param {restify.Request} req
-   * @param {restify.Response} res
-   * @param {restify.Next} next
-   */
   destroy(req: Request, res: Response, next: Next) {
     this.registerRequest(req, res, next);
     const { cloneId } = req.query;
@@ -274,11 +256,6 @@ export class Forkestrator<ProcessType extends CloneChildProcess>
     }, next);
   }
 
-  /**
-   * @param {restify.Request} req
-   * @param {restify.Response} res
-   * @param {restify.Next} next
-   */
   partition(req: Request, res: Response, next: Next) {
     const { cloneId, state: stateString } = req.query;
     LOG.debug(logTs(), cloneId, `Partitioning clone (${stateString})`);

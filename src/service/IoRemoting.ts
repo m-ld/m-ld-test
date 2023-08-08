@@ -1,0 +1,1 @@
+// https://github.com/socketio/socket.io-client/issues/1431#issuecomment-754938053

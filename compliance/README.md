@@ -4,7 +4,7 @@ project.
 
 They assume the existence of a running 'orchestrator' of **m-ld** clones. An
 orchestrator is a REST server that exposes the interface defined in
-[clone.ts](../src/clone.ts). The orchestrator's responsibility is to manipulate
+[Clone.ts](../src/Clone.ts). The orchestrator's responsibility is to manipulate
 clones on behalf of the compliance tests. It can do so in any way it chooses:
 * Child processes (node.js)
 * Actors (Vert.x)

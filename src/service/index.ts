@@ -9,21 +9,23 @@ export interface Orchestrator {
   ): this;
 }
 
-export interface CloneChildProcess {
+export interface CloneChildProcessState {
   id: string,
   process?: ChildProcess,
   tmpDir: DirResult
 }
 
-export interface Remoting<ProcessType extends CloneChildProcess> {
-  initialise(clones: { [id: string]: ProcessType }): void;
-  provision(cloneId: string): Promise<{
-    config: {}, meta: Omit<ProcessType, keyof CloneChildProcess>
-  }>;
-  partition(clone: ProcessType, partition: boolean): Promise<void>;
-  release(clone: ProcessType, opts?: { unref: true }): Promise<void>;
+export type CloneRemotingInfo<ProcessState extends CloneChildProcessState> = {
+  config: {}, meta: Omit<ProcessState, keyof CloneChildProcessState>
+};
+
+export interface Remoting<ProcessState extends CloneChildProcessState> {
+  initialise(clones: { [id: string]: ProcessState }): void;
+  provision(cloneId: string): Promise<CloneRemotingInfo<ProcessState>>;
+  partition(clone: ProcessState, partition: boolean): Promise<void>;
+  release(clone: ProcessState, opts?: { unref: true }): Promise<void>;
 }
 
-export * from './clone-process';
-export * from './forkestrator';
-export * from './mqtt-remoting';
+export * from './CloneProcess';
+export * from './Forkestrator';
+export * from './MqttRemoting';
