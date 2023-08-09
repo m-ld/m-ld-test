@@ -7,6 +7,10 @@
     ".": "./ext/index.js",
     "./compliance": "./compliance/index.js"
   },
+  "files": [
+    "ext",
+    "compliance"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
