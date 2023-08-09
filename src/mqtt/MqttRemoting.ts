@@ -1,6 +1,6 @@
 // noinspection JSUnusedGlobalSymbols
 
-import { CloneChildProcessState, CloneRemotingInfo, Remoting } from './index';
+import { CloneChildProcessState, CloneRemotingInfo, Remoting } from '../service/index';
 import Aedes from 'aedes';
 import type { Client } from 'aedes:client';
 import LOG from 'loglevel';

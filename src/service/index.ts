@@ -28,4 +28,3 @@ export interface Remoting<ProcessState extends CloneChildProcessState> {
 
 export * from './CloneProcess';
 export * from './Forkestrator';
-export * from './MqttRemoting';
