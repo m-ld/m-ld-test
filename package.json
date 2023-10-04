@@ -32,7 +32,7 @@
   },
   "homepage": "https://github.com/m-ld/m-ld-test#readme",
   "dependencies": {
-    "@m-ld/m-ld-spec": "^0.7.0-edge.2",
+    "@m-ld/m-ld-spec": "^0.7.0",
     "@types/node-fetch": "^2.6.4",
     "@types/restify-errors": "^4.3.4",
     "@types/tmp": "^0.2.3",
